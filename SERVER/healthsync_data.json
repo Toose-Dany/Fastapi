@@ -1,0 +1,31 @@
+{
+  "users": {
+    "1": {
+      "id": 1,
+      "email": "1234",
+      "username": "1234",
+      "password": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+      "height": 180.0,
+      "weight": 60.0,
+      "sync_coins": 110,
+      "registration_date": "2026-05-25T14:08:20.378854",
+      "city": "Moscow",
+      "theme": "Light",
+      "notifications_enabled": true,
+      "auto_sync": true,
+      "daily_reminder": true,
+      "reminder_time": "20:00",
+      "steps_goal": 10000,
+      "water_goal_ml": 2500,
+      "sleep_goal": 8.0,
+      "calories_goal": 2000,
+      "last_heart_rate": 70,
+      "last_systolic": 120,
+      "last_diastolic": 60,
+      "last_update_date": "2026-05-25",
+      "age": 25,
+      "gender": "male"
+    }
+  },
+  "next_user_id": 2
+}
