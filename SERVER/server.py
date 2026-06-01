@@ -28,6 +28,7 @@ class UserRegister(BaseModel):
     password: str
     height: float
     weight: float
+    gender: str = "male"
     activity_level: str = "moderate"
 
 
@@ -84,6 +85,14 @@ class SettingsUpdate(BaseModel):
     auto_sync: Optional[bool] = None
     daily_reminder: Optional[bool] = None
     reminder_time: Optional[str] = None
+
+
+class ProfileUpdate(BaseModel):
+    user_id: int
+    username: Optional[str] = None
+    email: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
 
 
 # ================= БАЗА ДАННЫХ =================
@@ -195,8 +204,8 @@ async def register_user(user_data: UserRegister):
     """Регистрация нового пользователя"""
     try:
         print(f"📝 Регистрация: {user_data.username}, {user_data.email}")
+        print(f"   Пол при регистрации: {user_data.gender}")
         
-        # Проверяем, существует ли пользователь
         existing = db.get_user_by_username(user_data.username)
         if existing:
             return JSONResponse(
@@ -211,7 +220,6 @@ async def register_user(user_data: UserRegister):
                 content={"detail": "Пользователь с таким email уже существует"}
             )
         
-        # Создаем пользователя
         user = db.create_user(
             username=user_data.username,
             email=user_data.email,
@@ -220,7 +228,13 @@ async def register_user(user_data: UserRegister):
             weight=user_data.weight
         )
         
-        print(f"✅ Пользователь создан: ID={user['id']}, {user['username']}")
+        # Устанавливаем пол из запроса
+        gender_value = "male" if user_data.gender == "male" else "female"
+        user["gender"] = gender_value
+        
+        db.save_to_file()
+        
+        print(f"✅ Пользователь создан: ID={user['id']}, {user['username']}, пол={user['gender']}")
         
         return {
             "status": "success",
@@ -255,7 +269,19 @@ async def login(login_data: UserLogin):
                 content={"detail": "Неверный логин или пароль"}
             )
         
+        # Получаем пол из БД
+        user_gender = user.get("gender", "male")
+        
+        # Конвертируем для отображения
+        if user_gender == "male":
+            gender_display = "Мужской"
+        elif user_gender == "female":
+            gender_display = "Женский"
+        else:
+            gender_display = "Мужской"
+        
         print(f"✅ Успешный вход: {user['username']} (ID={user['id']})")
+        print(f"   Пол в БД: {user_gender} -> возвращаем: {gender_display}")
         
         return {
             "id": user["id"],
@@ -277,7 +303,7 @@ async def login(login_data: UserLogin):
             "calories_goal": user["calories_goal"],
             "city": user["city"],
             "theme": user["theme"],
-            "gender": "Мужской" if user["gender"] == "male" else "Женский",
+            "gender": gender_display,
             "notifications_enabled": user["notifications_enabled"],
             "auto_sync": user["auto_sync"],
             "daily_reminder": user["daily_reminder"],
@@ -458,6 +484,46 @@ async def update_settings(data: SettingsUpdate):
     return {"status": "success"}
 
 
+@app.post("/profile")
+async def update_profile(data: ProfileUpdate):
+    """Обновление профиля пользователя (имя, email, возраст, пол)"""
+    print("=" * 50)
+    print(f"🔍 ПОЛУЧЕН ЗАПРОС НА ОБНОВЛЕНИЕ ПРОФИЛЯ:")
+    print(f"   user_id: {data.user_id}")
+    print(f"   username: {data.username}")
+    print(f"   email: {data.email}")
+    print(f"   age: {data.age}")
+    print(f"   gender: {data.gender}")
+    print("=" * 50)
+    
+    user = db.get_user(data.user_id)
+    if not user:
+        print(f"❌ Пользователь с ID {data.user_id} не найден!")
+        return JSONResponse(status_code=404, content={"detail": "Пользователь не найден"})
+    
+    print(f"📋 ДО обновления: gender={user.get('gender')}, age={user.get('age')}")
+    
+    if data.username is not None:
+        user["username"] = data.username
+        print(f"   ✅ Обновлено username: {data.username}")
+    if data.email is not None:
+        user["email"] = data.email
+        print(f"   ✅ Обновлено email: {data.email}")
+    if data.age is not None:
+        user["age"] = data.age
+        print(f"   ✅ Обновлено age: {data.age}")
+    if data.gender is not None:
+        user["gender"] = data.gender
+        print(f"   ✅ Обновлено gender: {data.gender}")
+    
+    db.save_to_file()
+    
+    print(f"📋 ПОСЛЕ обновления: gender={user.get('gender')}")
+    print("=" * 50)
+    
+    return {"status": "success"}
+
+
 @app.get("/history/{user_id}")
 async def get_history(user_id: int):
     """Получить историю (заглушка)"""
@@ -475,7 +541,6 @@ async def get_weather(city: str):
     try:
         import httpx
         
-        # Координаты для популярных городов
         coords = {
             "moscow": {"lat": 55.75, "lon": 37.62},
             "london": {"lat": 51.51, "lon": -0.13},
