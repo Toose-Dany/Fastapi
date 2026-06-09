@@ -28,6 +28,7 @@ class UserRegister(BaseModel):
     password: str
     height: float
     weight: float
+    age: int  # ДОБАВЛЕНО
     gender: str = "male"
     activity_level: str = "moderate"
 
@@ -143,7 +144,7 @@ class Database:
                 return user
         return None
 
-    def create_user(self, username: str, email: str, password: str, height: float, weight: float) -> Dict:
+    def create_user(self, username: str, email: str, password: str, height: float, weight: float, age: int = 25, gender: str = "male") -> Dict:
         user_id = self.next_user_id
         self.next_user_id += 1
 
@@ -156,6 +157,8 @@ class Database:
             "password": self.hash_password(password),
             "height": height,
             "weight": weight,
+            "age": age,
+            "gender": gender,
             "sync_coins": 100,
             "registration_date": datetime.now().isoformat(),
             "city": "Moscow",
@@ -171,9 +174,7 @@ class Database:
             "last_heart_rate": 68,
             "last_systolic": 118,
             "last_diastolic": 75,
-            "last_update_date": today,
-            "age": 25,
-            "gender": "male"
+            "last_update_date": today
         }
 
         self.users[user_id] = user
@@ -204,7 +205,8 @@ async def register_user(user_data: UserRegister):
     """Регистрация нового пользователя"""
     try:
         print(f"📝 Регистрация: {user_data.username}, {user_data.email}")
-        print(f"   Пол при регистрации: {user_data.gender}")
+        print(f"   Возраст: {user_data.age}")
+        print(f"   Пол: {user_data.gender}")
         
         existing = db.get_user_by_username(user_data.username)
         if existing:
@@ -225,16 +227,14 @@ async def register_user(user_data: UserRegister):
             email=user_data.email,
             password=user_data.password,
             height=user_data.height,
-            weight=user_data.weight
+            weight=user_data.weight,
+            age=user_data.age,
+            gender=user_data.gender
         )
-        
-        # Устанавливаем пол из запроса
-        gender_value = "male" if user_data.gender == "male" else "female"
-        user["gender"] = gender_value
         
         db.save_to_file()
         
-        print(f"✅ Пользователь создан: ID={user['id']}, {user['username']}, пол={user['gender']}")
+        print(f"✅ Пользователь создан: ID={user['id']}, возраст={user['age']}, пол={user['gender']}")
         
         return {
             "status": "success",
@@ -269,19 +269,16 @@ async def login(login_data: UserLogin):
                 content={"detail": "Неверный логин или пароль"}
             )
         
-        # Получаем пол из БД
+        # Берем возраст и пол из БД
+        user_age = user.get("age", 25)
         user_gender = user.get("gender", "male")
         
-        # Конвертируем для отображения
-        if user_gender == "male":
-            gender_display = "Мужской"
-        elif user_gender == "female":
-            gender_display = "Женский"
-        else:
-            gender_display = "Мужской"
+        # Конвертируем пол для отображения
+        gender_display = "Мужской" if user_gender == "male" else "Женский"
         
         print(f"✅ Успешный вход: {user['username']} (ID={user['id']})")
-        print(f"   Пол в БД: {user_gender} -> возвращаем: {gender_display}")
+        print(f"   Возраст: {user_age}")
+        print(f"   Пол: {user_gender} -> {gender_display}")
         
         return {
             "id": user["id"],
@@ -289,7 +286,7 @@ async def login(login_data: UserLogin):
             "username": user["username"],
             "height": user["height"],
             "weight": user["weight"],
-            "age": user.get("age", 25),
+            "age": user_age,
             "sync_coins": user["sync_coins"],
             "steps": 0,
             "water": 0,
@@ -327,6 +324,9 @@ async def get_user_data(user_id: int):
             content={"detail": "Пользователь не найден"}
         )
     
+    user_gender = user.get("gender", "male")
+    gender_display = "Мужской" if user_gender == "male" else "Женский"
+    
     return {
         "id": user["id"],
         "email": user["email"],
@@ -347,7 +347,7 @@ async def get_user_data(user_id: int):
         "calories_goal": user["calories_goal"],
         "city": user["city"],
         "theme": user["theme"],
-        "gender": "Мужской" if user["gender"] == "male" else "Женский",
+        "gender": gender_display,
         "notifications_enabled": user["notifications_enabled"],
         "auto_sync": user["auto_sync"],
         "daily_reminder": user["daily_reminder"],
@@ -486,9 +486,9 @@ async def update_settings(data: SettingsUpdate):
 
 @app.post("/profile")
 async def update_profile(data: ProfileUpdate):
-    """Обновление профиля пользователя (имя, email, возраст, пол)"""
+    """Обновление профиля пользователя"""
     print("=" * 50)
-    print(f"🔍 ПОЛУЧЕН ЗАПРОС НА ОБНОВЛЕНИЕ ПРОФИЛЯ:")
+    print(f"🔍 ОБНОВЛЕНИЕ ПРОФИЛЯ:")
     print(f"   user_id: {data.user_id}")
     print(f"   username: {data.username}")
     print(f"   email: {data.email}")
@@ -498,28 +498,21 @@ async def update_profile(data: ProfileUpdate):
     
     user = db.get_user(data.user_id)
     if not user:
-        print(f"❌ Пользователь с ID {data.user_id} не найден!")
+        print(f"❌ Пользователь не найден!")
         return JSONResponse(status_code=404, content={"detail": "Пользователь не найден"})
-    
-    print(f"📋 ДО обновления: gender={user.get('gender')}, age={user.get('age')}")
     
     if data.username is not None:
         user["username"] = data.username
-        print(f"   ✅ Обновлено username: {data.username}")
     if data.email is not None:
         user["email"] = data.email
-        print(f"   ✅ Обновлено email: {data.email}")
     if data.age is not None:
         user["age"] = data.age
-        print(f"   ✅ Обновлено age: {data.age}")
     if data.gender is not None:
         user["gender"] = data.gender
-        print(f"   ✅ Обновлено gender: {data.gender}")
     
     db.save_to_file()
     
-    print(f"📋 ПОСЛЕ обновления: gender={user.get('gender')}")
-    print("=" * 50)
+    print(f"✅ Профиль обновлен: возраст={user.get('age')}, пол={user.get('gender')}")
     
     return {"status": "success"}
 
@@ -629,7 +622,7 @@ ADMIN_HTML = """
             <button class="refresh-btn" onclick="loadUsers()">🔄 Обновить</button>
             <table>
                 <thead>
-                    <tr><th>ID</th><th>Имя</th><th>Email</th><th>Вес</th><th>Рост</th><th>SyncCoins</th></tr>
+                    <tr><th>ID</th><th>Имя</th><th>Email</th><th>Возраст</th><th>Пол</th><th>Вес</th><th>Рост</th><th>SyncCoins</th></tr>
                 </thead>
                 <tbody id="usersTable"></tbody>
             </table>
@@ -646,6 +639,8 @@ ADMIN_HTML = """
                     <td>${u.id}</td>
                     <td>${u.username}</td>
                     <td>${u.email}</td>
+                    <td>${u.age}</td>
+                    <td>${u.gender_display}</td>
                     <td>${u.weight} кг</td>
                     <td>${u.height} см</td>
                     <td>🪙 ${u.sync_coins}</td>
@@ -668,17 +663,20 @@ async def admin_panel():
 
 @app.get("/admin/users")
 async def admin_get_users():
-    return [
-        {
+    users_list = []
+    for u in db.users.values():
+        gender_display = "Мужской" if u.get("gender") == "male" else "Женский"
+        users_list.append({
             "id": u["id"],
             "username": u["username"],
             "email": u["email"],
+            "age": u.get("age", 25),
+            "gender_display": gender_display,
             "weight": u["weight"],
             "height": u["height"],
             "sync_coins": u["sync_coins"]
-        }
-        for u in db.users.values()
-    ]
+        })
+    return users_list
 
 
 # ================= ЗАПУСК =================
